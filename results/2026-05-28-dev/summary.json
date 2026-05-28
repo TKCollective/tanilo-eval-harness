@@ -1,0 +1,7 @@
+{
+  "total_claims": 498,
+  "mapping_version": "v2",
+  "mapping_description": "supported+adv=vulnerable\u2192Conflicting; supported else\u2192Supported; refuted\u2192Refuted; unverifiable/unknown\u2192Not Enough Evidence",
+  "endpoint": "https://agentoracle.co/evaluate",
+  "dataset": "AVeriTeC 2024 dev set (MichSchli/AVeriTeC@main, data/dev.json)"
+}

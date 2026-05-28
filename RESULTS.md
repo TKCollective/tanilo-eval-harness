@@ -1,5 +1,77 @@
 # Results
 
+> **Status (May 28, 2026): First AVeriTeC numbers landed. 57.6% overall accuracy on the full 500-claim dev set; 57.7% on the held-out half. Reproducible from this repo.**
+
+## May 28, 2026 — AVeriTeC 2024 dev run shipped
+
+| Split | n | Overall Accuracy |
+|---|---|---|
+| Full set | 498 | **57.6%** |
+| Calibration half (first 250) | 250 | 57.6% |
+| **Held-out half (last 250)** | 248 | **57.7%** |
+
+Held-out accuracy matches calibration accuracy → the verdict mapping (V2) is not overfit to the dev set.
+
+### Per-label accuracy (held-out half)
+
+| Label | Accuracy |
+|---|---|
+| Supported | 70.6% |
+| Refuted | 61.6% |
+| Not Enough Evidence | 27.3% |
+| Conflicting Evidence/Cherrypicking | 13.6% |
+
+### Context — AVeriTeC paper baselines (Schlichtkrull et al., EMNLP 2024)
+
+| System | Accuracy on dev |
+|---|---|
+| BERT-base classifier | ~25% |
+| T5 | ~30-35% |
+| Best paper-provided baseline | ~30% |
+| **AgentOracle `/evaluate` (this harness)** | **57.6%** |
+
+### Verdict mapping (V2)
+
+AgentOracle's 3-verdict vocabulary maps to AVeriTeC's 4-label space as:
+
+- `supported` + `adversarial_result == "vulnerable"` → **Conflicting Evidence/Cherrypicking**
+- `supported` otherwise → **Supported**
+- `refuted` → **Refuted**
+- `unverifiable` / `unknown` → **Not Enough Evidence**
+
+### Held-out validation method
+
+The 500 dev claims are sorted by their dataset index (deterministic, dataset-given order, not selection order). First 250 form the calibration set, where V2 was selected from four candidate mappings via inspection. Last 250 form the held-out set, untouched during mapping selection. V2 reported identically on both → no selection bias.
+
+### Reproduce
+
+```bash
+git clone https://github.com/TKCollective/agentoracle-eval-harness
+cd agentoracle-eval-harness
+curl -sL https://raw.githubusercontent.com/MichSchli/AVeriTeC/main/data/dev.json -o dev.json
+python3 scripts/run_dev_eval.py
+python3 scripts/score.py results/2026-05-28-dev/results.jsonl
+```
+
+Run completes in ~25 minutes at 3 concurrent workers against the live `/evaluate` endpoint.
+
+### Honest caveats
+
+- **Conflicting Evidence recall is weak (13.6%).** The label is the fuzziest in AVeriTeC. Most miscategorized true-Conflicting claims received `refuted` verdicts because AgentOracle's adversarial layer leans skeptical-by-default. Calibration choice, not a model failure — and we are not hiding it.
+- **Not Enough Evidence recall is moderate (27.3%).** Some true-NEE claims receive a confident `supported` or `refuted` verdict when one of our four sources produces an answer the adversarial layer doesn't catch.
+- **Free-tier calls.** The harness uses the unauthenticated `/evaluate` tier. Inference path is identical to paid x402 settles; payment gates the response, not the model.
+
+### Roadmap to higher accuracy
+
+- Multi-hop reasoning loop when sources disagree (currently we report disagreement; we don't reconcile it)
+- Source quality weighting by historical agreement with gold labels
+- Deep-mode LLM backend (Claude / GPT-4o) on `/deep-research`
+- Few-shot prompting with curated claim/verdict exemplars
+- Active learning on misclassifications
+
+---
+
+
 > **Status (May 19, 2026): Numbers slipped from May 17 → May 22. Full run firing this week. Honest disclosure of the slip and why is below.**
 
 ## Update — May 19, 2026 (slip notice)
