@@ -28,16 +28,23 @@ from src.clients.agentoracle_client import AgentOracleClient
 logger = logging.getLogger("ao.averitec.runner")
 
 
-# AgentOracle returns one of: "act" / "verify" / "reject" / "abstain"
+# AgentOracle returns:
+#   verdict_raw     ∈ {"supported", "refuted", "unverifiable", "unknown"}
+#   recommendation  ∈ {"act", "verify", "reject", "abstain"}   (binary-style gate)
+#
 # AVeriTeC labels: Supported / Refuted / Not Enough Evidence / Conflicting Evidence/Cherrypicking
-# We map AO verdicts -> AVeriTeC labels; abstentions are kept distinct (NEI).
-AO_TO_AVERITEC: dict[str, str] = {
-    "act": "Supported",
-    "verify": "Supported",   # AO's "verify" is high-confidence-but-needs-secondary; treat as supported
-    "reject": "Refuted",
-    "abstain": "Not Enough Evidence",
-    "conflict": "Conflicting Evidence/Cherrypicking",
-    "conflicting": "Conflicting Evidence/Cherrypicking",
+#
+# Label mapping is driven by `verdict_raw` (the truth label), with `adversarial_result`
+# promoting `supported` -> `Conflicting Evidence/Cherrypicking` when the claim was found
+# vulnerable to adversarial probes. Scoring (scripts/score.py) is the single source of
+# truth for this mapping; the runner only persists the raw fields so the mapping can be
+# re-run / re-tuned without re-hitting the API.
+AO_VERDICT_RAW_TO_AVERITEC: dict[str, str] = {
+    "supported": "Supported",
+    "refuted": "Refuted",
+    "unverifiable": "Not Enough Evidence",
+    "not_enough_evidence": "Not Enough Evidence",
+    "unknown": "Not Enough Evidence",
 }
 
 
@@ -57,29 +64,42 @@ def predict(client: AgentOracleClient, claim: AveritecClaim, run_id: str) -> dic
             "claim": claim.claim,
             "gold_label": claim.label,
             "predicted_label": "Not Enough Evidence",
-            "ao_verdict": None,
-            "confidence": 0.0,
+            "agentoracle": None,
             "sources": [],
             "gold_urls": claim.gold_urls,
             "latency_s": time.monotonic() - t0,
             "ok": ok,
             "error": err,
+            "ts": int(time.time()),
         }
 
-    pred_label = AO_TO_AVERITEC.get(resp.verdict.lower(), "Not Enough Evidence")
+    # Derive AVeriTeC label from verdict_raw + adversarial signal
+    raw = (resp.verdict_raw or "unknown").lower()
+    pred_label = AO_VERDICT_RAW_TO_AVERITEC.get(raw, "Not Enough Evidence")
+    if raw == "supported" and resp.adversarial_result == "vulnerable":
+        pred_label = "Conflicting Evidence/Cherrypicking"
+
     return {
         "claim_id": claim.claim_id,
         "claim": claim.claim,
         "gold_label": claim.label,
         "predicted_label": pred_label,
-        "ao_verdict": resp.verdict,
-        "confidence": resp.confidence,
+        "agentoracle": {
+            "verdict_raw": resp.verdict_raw,
+            "verdict_mapped": resp.verdict_mapped or pred_label,
+            "recommendation": resp.recommendation,
+            "confidence_overall": resp.confidence_overall,
+            "confidence_claim": resp.confidence_claim,
+            "adversarial_result": resp.adversarial_result,
+            "adversarial_flags": list(resp.adversarial_flags or []),
+        },
         "sources": resp.sources,
         "gold_urls": claim.gold_urls,
         "latency_s": resp.latency_s,
         "evaluation_id": resp.evaluation_id,
         "ok": ok,
         "error": None,
+        "ts": int(time.time()),
     }
 
 

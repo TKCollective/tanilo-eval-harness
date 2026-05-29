@@ -36,14 +36,31 @@ class EvaluateRequest:
 
 @dataclass
 class EvaluateResponse:
-    """Normalized response shape for downstream scoring."""
-    verdict: str                      # "act" | "verify" | "reject" | "abstain"
-    confidence: float                 # 0.0 - 1.0
+    """Normalized response shape for downstream scoring.
+
+    Canonical field is `recommendation` (the binary act-or-halt signal
+    consumed by score.py). `verdict_raw` is the underlying truth label
+    (supported / refuted / unverifiable) used for label-level reporting.
+    Confidence is split into overall vs claim-level to preserve receipt
+    metadata. Adversarial fields ride alongside as facets.
+    """
+    verdict_raw: str                  # "supported" | "refuted" | "unverifiable" | "unknown"
+    verdict_mapped: str               # server-side AVeriTeC label mapping (if present)
+    recommendation: str               # "act" | "verify" | "reject" | "abstain"
+    confidence_overall: float         # 0.0 - 1.0 (rolled-up)
+    confidence_claim: float           # 0.0 - 1.0 (per-claim, when present)
+    adversarial_result: str           # "vulnerable" | "resilient" | "not_checked"
+    adversarial_flags: list[str]
     claims: list[dict[str, Any]]      # per-claim breakdown
     sources: list[str]                # URLs of retrieved evidence
     evaluation_id: str
     raw: dict[str, Any]               # full server response (for receipt extraction)
     latency_s: float
+
+    @property
+    def verdict(self) -> str:
+        """Back-compat alias: prefer `recommendation` for gating, `verdict_raw` for labels."""
+        return self.recommendation
 
 
 class RateLimitError(Exception):
@@ -119,14 +136,36 @@ class AgentOracleClient:
 
 def _parse_response(body: dict[str, Any], latency: float) -> EvaluateResponse:
     # Flexible to current v2.2 shape; adapt as /evaluate response evolves.
-    verdict = body.get("verdict") or body.get("result", {}).get("verdict", "abstain")
-    confidence = float(body.get("confidence") or body.get("result", {}).get("confidence", 0.0))
-    claims = body.get("claims") or body.get("result", {}).get("claims", [])
-    sources = body.get("sources") or body.get("result", {}).get("sources", [])
-    eval_id = body.get("evaluation_id") or body.get("id", "unknown")
+    result = body.get("result") if isinstance(body.get("result"), dict) else {}
+
+    def _pick(*keys, default=None):
+        for k in keys:
+            v = body.get(k)
+            if v is None:
+                v = result.get(k)
+            if v is not None:
+                return v
+        return default
+
+    verdict_raw = (_pick("verdict_raw", "verdict", default="unknown") or "unknown").lower()
+    verdict_mapped = _pick("verdict_mapped", default="")
+    recommendation = (_pick("recommendation", default="abstain") or "abstain").lower()
+    confidence_overall = float(_pick("confidence_overall", "confidence", default=0.0) or 0.0)
+    confidence_claim = float(_pick("confidence_claim", default=confidence_overall) or 0.0)
+    adversarial_result = _pick("adversarial_result", default="not_checked") or "not_checked"
+    adversarial_flags = _pick("adversarial_flags", default=[]) or []
+    claims = _pick("claims", default=[]) or []
+    sources = _pick("sources", default=[]) or []
+    eval_id = _pick("evaluation_id", "id", default="unknown") or "unknown"
+
     return EvaluateResponse(
-        verdict=verdict,
-        confidence=confidence,
+        verdict_raw=verdict_raw,
+        verdict_mapped=verdict_mapped,
+        recommendation=recommendation,
+        confidence_overall=confidence_overall,
+        confidence_claim=confidence_claim,
+        adversarial_result=adversarial_result,
+        adversarial_flags=list(adversarial_flags),
         claims=claims,
         sources=sources,
         evaluation_id=eval_id,
