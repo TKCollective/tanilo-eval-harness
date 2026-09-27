@@ -1,4 +1,4 @@
-# AgentOracle Eval Harness
+# Tanilo Eval Harness (formerly AgentOracle)
 
 > **Status (May 14, 2026): Public ship.** Code, dataset loaders, runners, scoring, and Docker spec are open for clone-and-reproduce. Smoke-test results are in `results/smoke/`. **First full FEVER 1.0 dev + AVeriTeC 2024 dev numbers will land in `RESULTS.md` on May 17, 2026** — we are intentionally separating the code-public date from the results-public date so reproducibility instructions ship without rushed numbers behind them.
 >
