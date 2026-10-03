@@ -50,11 +50,11 @@ This repository was announced on 30 April 2026 and made public on 14 May 2026, w
 | AVeriTeC 2024 dev run | Done on 28 May 2026 (planned for 11 May). Results above. |
 | FEVER 1.0 dev run | Not done. Deferred on 19 May 2026; no results are in the repository. |
 | Recall@5 and Recall@10 on evidence retrieval for the full run | Scoring code exists in `src/scoring/`. No full-run figures are published. |
-| A no-retrieval baseline to measure contamination | Runner code exists (`src/averitec/runner_parametric.py`). No results are published. |
+| A no-retrieval baseline to help estimate contamination | Runner code exists (`src/averitec/runner_parametric.py`). No results are published. |
 | A published Docker image and a signed receipt for the run | No record of either in this repository. |
 | A clean-machine re-run before publication | No record in this repository. |
 
-The earlier README said the harness would make the service's numbers reproducible by third parties. One AVeriTeC result can be re-scored from the published file. The run itself cannot be repeated against the same pipeline, because that pipeline no longer exists.
+The earlier README said the harness would make the service's numbers reproducible by third parties. One AVeriTeC result can be re-scored from the published file. The run itself cannot be repeated against the same pipeline, because that pipeline was replaced.
 
 ## Datasets
 
@@ -68,7 +68,7 @@ See each dataset's own page for its licence terms.
 - The published result is for one run, on one date, on a pipeline that has been replaced.
 - 2 of the 500 dev claims returned server errors and were not scored.
 - The label mapping was chosen by inspecting the first half of the dev set.
-- Language models may have seen benchmark claims in training. The planned no-retrieval baseline that would measure this has no published results.
+- Language models may have seen benchmark claims in training. The planned no-retrieval baseline that would help estimate this has no published results.
 
 ## Questions
 
