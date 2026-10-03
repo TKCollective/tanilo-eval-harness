@@ -1,146 +1,90 @@
 # Tanilo Eval Harness (formerly AgentOracle)
 
-> **Status (May 14, 2026): Public ship.** Code, dataset loaders, runners, scoring, and Docker spec are open for clone-and-reproduce. Smoke-test results are in `results/smoke/`. **First full FEVER 1.0 dev + AVeriTeC 2024 dev numbers will land in `RESULTS.md` on May 17, 2026** — we are intentionally separating the code-public date from the results-public date so reproducibility instructions ship without rushed numbers behind them.
->
-> Committed to the [x402 Discord #verifiable-trust thread](https://discord.gg/cdp) on Apr 30, 2026 in response to [architectural review from @beenz](https://github.com/TKCollective/agentoracle-receipt-spec). This repo is the artifact that makes AgentOracle's calibration claims third-party reproducible.
->
-> See [RESULTS.md](./RESULTS.md) for the run schedule and current status.
+Scripts and results from a May 2026 evaluation of the `/evaluate` endpoint against the AVeriTeC 2024 dev set. Tanilo was AgentOracle until September 2026; file names, script names and the dated records in this repository keep the old name.
 
-## What this is
+## Status, 2026-10-03
 
-A reproducible evaluation harness that measures AgentOracle's [`/evaluate`](https://agentoracle.co/evaluate) endpoint against two public fact-verification benchmarks:
+- **One result is published here.** 287 of 498 scored claims correct, 57.6% label accuracy, on the AVeriTeC 2024 dev set. It was measured on 28 May 2026 against the live `/evaluate` endpoint. The dev set has 500 claims; the results file has 500 rows, of which 498 were scored. The other two calls returned server errors.
+- **That figure describes a pipeline that has since been replaced.** The evaluation pipeline behind `/evaluate` was replaced in September 2026. The benchmark has not been re-run since. The figure says nothing about the service as it runs today.
+- **Split.** First 250 claims by dataset order: 144 of 250, 57.6%. Last 250: 143 of 248 scored, 57.7%. The mapping from the service's verdicts to AVeriTeC's four labels was chosen on the first half.
+- **No FEVER result is published here, and none should be cited.** The FEVER run this repository planned was deferred and is not in the repository. See the corrections record in [tanilo-receipt-spec](https://github.com/TKCollective/tanilo-receipt-spec#corrections-record).
+- **No one outside Tanilo is recorded in this repository as having re-run the evaluation.**
 
-1. **FEVER 1.0 dev set** — the classic 19,998-claim benchmark (our headline number comes from here)
-2. **AVeriTeC 2024 shared task** — the newer, contamination-controlled real-world benchmark
+The dated record of the run, including per-label accuracy and its caveats, is in [RESULTS.md](./RESULTS.md). That file is kept as written.
 
-Both benchmarks report:
-- **Label accuracy** (when oracle evidence is supplied)
-- **End-to-end score** (retrieval pipeline + label — the "hard" setting)
-- **Recall@5 / Recall@10** on evidence retrieval
-- **Per-verdict breakdown** (SUPPORTED / REFUTED / NEI / CONFLICTING)
+## Can the harness be run today?
 
-The entire eval runs inside a single Docker container on a reproducible AWS EC2 spec. Any third party can clone, `docker build && docker run`, and produce comparable numbers.
+**Scoring: yes.** The scoring script re-computes the published figures from the published results file, with no network access:
 
-## Why this exists
+```bash
+git clone https://github.com/TKCollective/tanilo-eval-harness
+cd tanilo-eval-harness
+python3 scripts/score.py results/2026-05-28-dev/results.jsonl
+```
 
-Until this harness is public, AgentOracle's FEVER numbers are **provisional** — not third-party reproducible. That's disclosed in the [main receipt spec README](https://github.com/TKCollective/agentoracle-receipt-spec#readme). Shipping this harness moves the numbers from "provisional" to "reproducible."
+Checked on 2026-10-03: it prints `Overall: 57.6% (287/498)` for the full set and `Overall: 57.7% (143/248)` for the last-250 split.
 
-See the [provisional disclosure banner](https://github.com/TKCollective/agentoracle-receipt-spec#readme) for the full explanation of why reproducibility matters for probabilistic-attestation primitives.
+**A fresh run: not as written.** `scripts/run_dev_eval.py` sends all 500 dev claims to the live `/evaluate` endpoint. The endpoint is now a rate-limited free beta, and its limits are below what a 500-claim run needs. A fresh run would also measure the current pipeline, so it would not reproduce the May figure. No fresh run has been attempted since the pipeline changed.
 
-## Sprint plan (14 days)
+`scripts/run_full_eval.sh` and the Docker file belong to the larger plan described below and have not been checked against the current service.
 
-| Day | Date | Milestone | Deliverable |
-|---|---|---|---|
-| 0 | Apr 30 | Kickoff + research | Repo scaffold, dataset access verified, Docker spec locked |
-| 1–2 | May 1–2 | FEVER reproducer | FEVER dev-set runner, oracle-evidence mode, end-to-end mode |
-| 3–4 | May 3–4 | AVeriTeC runner | AVeriTeC dev-set runner using the public knowledge store |
-| 5 | May 5 | Evaluation scoring | Hungarian METEOR + Ev2R score integration |
-| 6–7 | May 6–7 | Recall metrics | Recall@5 / Recall@10 on evidence retrieval |
-| 8 | May 8 | Contamination test | Comparison: AgentOracle vs. "parametric knowledge only" (no web retrieval) baseline |
-| 9–10 | May 9–10 | Docker build + seed | Deterministic run with fixed seed inside published Docker image |
-| 11 | May 11 | Run full eval | End-to-end run on dev sets, results written to `/results` |
-| 12 | May 12 | Results writeup | `RESULTS.md` with tables, CIs, per-verdict breakdowns |
-| 13 | May 13 | External test | Independent clone + run on a clean EC2 instance to prove reproducibility |
-| 14 | May 14 | **Public ship** | Repo goes public, announcement in x402 Discord, spec repo's provisional banner updated |
-
-## Dataset licensing
-
-- **FEVER 1.0**: Creative Commons Attribution-ShareAlike 3.0. Free to use for research + commercial. Citation: Thorne et al., 2018.
-- **AVeriTeC**: CC-BY-SA 4.0 via [Huggingface chenxwh/AVeriTeC](https://huggingface.co/chenxwh/AVeriTeC). Knowledge store + dev set public. Test set hidden. Citation: Schlichtkrull et al., 2023/2024.
-
-Both are peer-reviewed public benchmarks — no legal risk to running AgentOracle against them and publishing scores.
-
-## Hardware target
-
-Matching the FEVER 2024 shared task reference configuration so results are comparable to published systems:
-
-| Component | Spec |
-|---|---|
-| Instance | AWS `g5.2xlarge` |
-| GPU | Nvidia A10G, 23GB |
-| CPU | 8 vCPUs |
-| RAM | 32GB |
-| Storage | 450GB (includes AVeriTeC knowledge store) |
-
-AgentOracle is a **hosted API** — we don't run models locally. The harness runs HTTP calls to `https://agentoracle.co/evaluate`, so compute requirements are modest: the GPU is only used for the evaluation grader (Llama 3.3 70B or equivalent open-weights model per FEVER 2024 rules). In production runs we substitute an OpenRouter-hosted Llama 3.3 70B inference call to avoid local GPU requirements; this is disclosed in the RESULTS writeup.
-
-## Repo structure
+## What is in this repository
 
 ```
 .
-├── src/                 # eval runners + scoring
-│   ├── fever/           # FEVER 1.0 dev-set runner
-│   ├── averitec/        # AVeriTeC dev-set runner
-│   ├── scoring/         # Hungarian METEOR, Ev2R, recall@k
-│   └── clients/         # AgentOracle /evaluate + /research HTTP clients
-├── scripts/             # setup, download, run
-│   ├── download_fever.sh
-│   ├── download_averitec.sh
-│   └── run_full_eval.sh
-├── docker/              # Dockerfile + build artifacts
-├── results/             # published run outputs (gitignored raw; committed summaries)
-└── docs/                # methodology, known limitations, FAQ
+├── RESULTS.md                    # dated record of the 28 May 2026 run
+├── results/2026-05-28-dev/       # results.jsonl (500 rows) and summary.json
+├── results/smoke/                # 4-claim smoke test, not an evaluation
+├── scripts/                      # run_dev_eval.py, score.py, download scripts, run_full_eval.sh
+├── src/                          # FEVER and AVeriTeC runners, scoring, HTTP clients
+├── docker/                       # Dockerfile for the planned full run
+└── docs/SPRINT_PLAN.md           # the April 2026 plan
 ```
 
-## Running the eval
+## History: the May 2026 plan
 
-```bash
-# 1. Clone + build
-git clone https://github.com/TKCollective/agentoracle-eval-harness
-cd agentoracle-eval-harness
-docker build -f docker/Dockerfile -t ao-eval .
+This repository was announced on 30 April 2026 and made public on 14 May 2026, with a 14-day plan. The plan is kept in [docs/SPRINT_PLAN.md](./docs/SPRINT_PLAN.md). What it set out to do, and what this repository shows was done:
 
-# 2. Download datasets
-./scripts/download_fever.sh       # ~45MB
-./scripts/download_averitec.sh    # ~12GB (knowledge store)
+| Planned | In this repository |
+|---|---|
+| AVeriTeC 2024 dev run | Done on 28 May 2026 (planned for 11 May). Results above. |
+| FEVER 1.0 dev run | Not done. Deferred on 19 May 2026; no results are in the repository. |
+| Recall@5 and Recall@10 on evidence retrieval for the full run | Scoring code exists in `src/scoring/`. No full-run figures are published. |
+| A no-retrieval baseline to measure contamination | Runner code exists (`src/averitec/runner_parametric.py`). No results are published. |
+| A published Docker image and a signed receipt for the run | No record of either in this repository. |
+| A clean-machine re-run before publication | No record in this repository. |
 
-# 3. Set API keys
-export AGENTORACLE_API_URL=https://agentoracle.co
-export OPENROUTER_API_KEY=...     # for Llama grader
-export BASE_WALLET_PRIVATE_KEY=... # for x402 payments, ~$40 in USDC
+The earlier README said the harness would make the service's numbers reproducible by third parties. One AVeriTeC result can be re-scored from the published file. The run itself cannot be repeated against the same pipeline, because that pipeline no longer exists.
 
-# 4. Run
-docker run -it --gpus all \
-  -v $(pwd)/results:/results \
-  -v $(pwd)/data:/data \
-  -e OPENROUTER_API_KEY \
-  ao-eval \
-  ./scripts/run_full_eval.sh
-```
+## Datasets
 
-Results land in `./results/run_<timestamp>.json` and `./results/RESULTS.md`.
+- **AVeriTeC**: Schlichtkrull et al. Dev set from [MichSchli/AVeriTeC](https://github.com/MichSchli/AVeriTeC) (`data/dev.json`). The test set is hidden, so only dev-set results are possible here.
+- **FEVER 1.0**: Thorne et al., 2018. Loader code only; no results.
 
-## What's published
+See each dataset's own page for its licence terms.
 
-After the sprint completes:
+## Limitations
 
-1. **`RESULTS.md`** — tables with CI, side-by-side FEVER vs AVeriTeC
-2. **`results/run_YYYY-MM-DD.json`** — raw scores + per-claim predictions
-3. **Published Docker image** on Docker Hub: `tkcollective/ao-eval:YYYY-MM-DD`
-4. **Signed receipt** — the evaluation run itself emits a signed receipt with a new `calibration.valid_until` anchor, logged back to the [main receipt spec repo](https://github.com/TKCollective/agentoracle-receipt-spec)
-
-## Limitations (known today)
-
-- **AVeriTeC test set is hidden.** We report dev-set scores only; test-set scores require submission to the FEVER workshop leaderboard
-- **LLM contamination risk remains.** FEVER 1.0 corpus was public in 2018; modern LLMs may have parametric knowledge of specific claims. We include a "parametric-only" baseline (no web retrieval) to quantify this
-- **Cost.** A full dev-set run costs ~$40 in x402 USDC payments to AgentOracle + ~$15 in OpenRouter Llama-grader calls. Budgeted, reproducible, disclosed
-- **Not SOTA.** AgentOracle is a trust primitive, not a claim-verification benchmark maximizer. Our target is 30-50% AVeriTeC score, not the 63% high-water mark. We're calibrated, not tuned
+- The published result is for one run, on one date, on a pipeline that has been replaced.
+- 2 of the 500 dev claims returned server errors and were not scored.
+- The label mapping was chosen by inspecting the first half of the dev set.
+- Language models may have seen benchmark claims in training. The planned no-retrieval baseline that would measure this has no published results.
 
 ## Questions
 
-Open an issue here, or join the [Coinbase Developer Discord #x402 thread](https://discord.gg/cdp).
+Open an issue in this repository, or write to joe@tanilo.io.
 
 ---
 
-**License:** MIT (harness code). Dataset licenses per their respective owners.
+**License:** MIT (harness code). Dataset licences per their respective owners.
 
 **Cite this harness:**
 
 ```
-@software{agentoracle_eval_2026,
-  author  = {AgentOracle (TK Collective LLC)},
-  title   = {AgentOracle Eval Harness: Reproducible benchmarking for probabilistic verification primitives},
+@software{tanilo_eval_2026,
+  author  = {Tanilo (TK Collective LLC)},
+  title   = {Tanilo Eval Harness (formerly AgentOracle Eval Harness)},
   year    = {2026},
-  url     = {https://github.com/TKCollective/agentoracle-eval-harness}
+  url     = {https://github.com/TKCollective/tanilo-eval-harness}
 }
 ```
